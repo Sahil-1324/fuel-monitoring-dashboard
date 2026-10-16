@@ -1,7 +1,9 @@
-
+jsx
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import "./Dashboard.css";
+
+const API_URL = "https://kasp-api-practice.onrender.com";
 
 export default function Dashboard() {
   const [machines, setMachines] = useState([]);
@@ -10,12 +12,20 @@ export default function Dashboard() {
 
   async function loadMachines() {
     try {
-      const response = await fetch("/api/machine-data");
-      if (!response.ok) throw new Error("Unable to load machine data");
-      setMachines(await response.json());
+      const response = await fetch(`${API_URL}/machine-data`);
+
+      if (!response.ok) {
+        throw new Error(`Unable to load machine data: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setMachines(data);
       setError("");
-    } catch {
-      setError("Cannot connect to Flask. Make sure your backend is running.");
+    } catch (err) {
+      console.error("Machine data error:", err);
+      setError(
+        "Cannot connect to Flask. Please check your backend connection."
+      );
     } finally {
       setLoading(false);
     }
@@ -23,15 +33,23 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadMachines();
+
     const interval = setInterval(loadMachines, 5000);
+
     return () => clearInterval(interval);
   }, []);
 
-  const lowFuel = machines.filter((m) => Number(m.fuel) <= 20).length;
-  const highTemperature = machines.filter(
-    (m) => Number(m.temperature) >= 80
+  const lowFuel = machines.filter(
+    (machine) => Number(machine.fuel) <= 20
   ).length;
-  const leakage = machines.filter((m) => m.leakage_suspected).length;
+
+  const highTemperature = machines.filter(
+    (machine) => Number(machine.temperature) >= 80
+  ).length;
+
+  const leakage = machines.filter(
+    (machine) => machine.leakage_suspected === true
+  ).length;
 
   function statusOf(machine) {
     if (machine.leakage_suspected) return "POSSIBLE LEAKAGE";
@@ -40,12 +58,21 @@ export default function Dashboard() {
     return "NORMAL";
   }
 
+  function statusClassOf(status) {
+    if (status === "NORMAL") return "normal";
+    if (status === "LOW FUEL") return "low";
+    if (status === "HIGH TEMPERATURE") return "hot";
+    return "leak";
+  }
+
   return (
     <div className="dashboard-app">
       <aside className="dashboard-sidebar">
         <Link to="/" className="dashboard-brand">
           <span className="dashboard-logo">◈</span>
-          <span>TANK<span>FLOW</span></span>
+          <span>
+            TANK<span>FLOW</span>
+          </span>
         </Link>
 
         <p className="dashboard-nav-title">WORKSPACE</p>
@@ -54,12 +81,15 @@ export default function Dashboard() {
           <Link to="/" className="dashboard-nav-link selected">
             <span>▦</span> Overview
           </Link>
+
           <a href="#machines" className="dashboard-nav-link">
             <span>◉</span> Live Monitoring
           </a>
+
           <Link to="/transactions" className="dashboard-nav-link">
             <span>↻</span> Transaction History
           </Link>
+
           <a href="#alerts" className="dashboard-nav-link">
             <span>♧</span> Alerts
           </a>
@@ -77,11 +107,20 @@ export default function Dashboard() {
       <main className="dashboard-main">
         <header className="dashboard-header">
           <div>
-            <span className="dashboard-eyebrow">FLEET MANAGEMENT / OVERVIEW</span>
+            <span className="dashboard-eyebrow">
+              FLEET MANAGEMENT / OVERVIEW
+            </span>
             <h1>Fuel Monitoring</h1>
-            <p>Monitor tanker fuel levels, temperature and safety alerts.</p>
+            <p>
+              Monitor tanker fuel levels, temperature and safety alerts.
+            </p>
           </div>
-          <button className="dashboard-refresh" onClick={loadMachines}>
+
+          <button
+            className="dashboard-refresh"
+            onClick={loadMachines}
+            disabled={loading}
+          >
             ↻ Refresh data
           </button>
         </header>
@@ -92,16 +131,21 @@ export default function Dashboard() {
             <strong>{machines.length}</strong>
             <small>Registered devices</small>
           </article>
+
           <article className="dashboard-stat">
             <span>Low Fuel</span>
             <strong className="dashboard-red">{lowFuel}</strong>
             <small>Fuel level at or below 20%</small>
           </article>
+
           <article className="dashboard-stat">
             <span>High Temperature</span>
-            <strong className="dashboard-orange">{highTemperature}</strong>
+            <strong className="dashboard-orange">
+              {highTemperature}
+            </strong>
             <small>Temperature at or above 80°</small>
           </article>
+
           <article className="dashboard-stat">
             <span>Leakage Alerts</span>
             <strong className="dashboard-pink">{leakage}</strong>
@@ -117,37 +161,42 @@ export default function Dashboard() {
               <h2>Live Tanker Monitoring</h2>
               <p>Current readings received from your Flask API.</p>
             </div>
+
             <span className="dashboard-live-label">
               <span className="dashboard-online-dot" /> LIVE
             </span>
           </div>
 
           {loading ? (
-            <p className="dashboard-message">Loading tanker data...</p>
+            <p className="dashboard-message">
+              Loading tanker data...
+            </p>
           ) : machines.length === 0 ? (
-            <p className="dashboard-message">No tankers found in the database.</p>
+            <p className="dashboard-message">
+              No tankers found in the database.
+            </p>
           ) : (
             <div className="dashboard-machine-grid">
               {machines.map((machine) => {
                 const status = statusOf(machine);
-                const statusClass =
-                  status === "NORMAL"
-                    ? "normal"
-                    : status === "LOW FUEL"
-                    ? "low"
-                    : status === "HIGH TEMPERATURE"
-                    ? "hot"
-                    : "leak";
+                const statusClass = statusClassOf(status);
 
                 return (
-                  <article className="dashboard-machine-card" key={machine.id}>
+                  <article
+                    className="dashboard-machine-card"
+                    key={machine.id}
+                  >
                     <div className="dashboard-machine-heading">
                       <div className="dashboard-machine-icon">◈</div>
+
                       <div>
                         <h3>{machine.device_id}</h3>
                         <small>Tanker monitoring unit</small>
                       </div>
-                      <span className={`dashboard-status ${statusClass}`}>
+
+                      <span
+                        className={`dashboard-status ${statusClass}`}
+                      >
                         {status}
                       </span>
                     </div>
@@ -156,6 +205,7 @@ export default function Dashboard() {
                       <span>Fuel level</span>
                       <strong>{machine.fuel}%</strong>
                     </div>
+
                     <div className="dashboard-fuel-track">
                       <div
                         className={
@@ -166,7 +216,7 @@ export default function Dashboard() {
                         style={{
                           width: `${Math.max(
                             0,
-                            Math.min(100, Number(machine.fuel))
+                            Math.min(100, Number(machine.fuel) || 0)
                           )}%`,
                         }}
                       />
@@ -189,10 +239,14 @@ export default function Dashboard() {
                       <span>Leakage status</span>
                       <strong
                         className={
-                          machine.leakage_suspected ? "dashboard-pink" : ""
+                          machine.leakage_suspected
+                            ? "dashboard-pink"
+                            : ""
                         }
                       >
-                        {machine.leakage_suspected ? "Suspected" : "Not detected"}
+                        {machine.leakage_suspected
+                          ? "Suspected"
+                          : "Not detected"}
                       </strong>
                     </div>
                   </article>
@@ -207,12 +261,21 @@ export default function Dashboard() {
             <h2>Safety overview</h2>
             <p>Review tankers that may need attention.</p>
           </div>
+
           {leakage + lowFuel + highTemperature === 0 ? (
-            <span className="dashboard-status normal">No active alerts</span>
+            <span className="dashboard-status normal">
+              No active alerts
+            </span>
           ) : (
             <div className="dashboard-alert-counts">
-              {leakage > 0 && <span>{leakage} leakage alert(s)</span>}
-              {lowFuel > 0 && <span>{lowFuel} low-fuel alert(s)</span>}
+              {leakage > 0 && (
+                <span>{leakage} leakage alert(s)</span>
+              )}
+
+              {lowFuel > 0 && (
+                <span>{lowFuel} low-fuel alert(s)</span>
+              )}
+
               {highTemperature > 0 && (
                 <span>{highTemperature} temperature alert(s)</span>
               )}
